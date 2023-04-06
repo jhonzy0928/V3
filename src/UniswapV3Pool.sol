@@ -3,12 +3,7 @@ pragma solidity ^0.8.14;
 import "./lib/Tick.sol";
 import "./lib/Position.sol";
 import "../lib/solmate/src/tokens/ERC20.sol";
-
-interface IERC20 {
-    function balanceOf(address) external returns (uint256);
-
-    function transfer(address to, uint256 amount) external;
-}
+import "./interfaces/IERC20.sol";
 
 interface IUniswapV3SwapCallback {
     /// @notice Called to `msg.sender` after executing a swap via IUniswapV3Pool#swap.
@@ -33,10 +28,11 @@ interface IUniswapV3MintCallback {
     /// The caller of this method must be checked to be a UniswapV3Pool deployed by the canonical UniswapV3Factory.
     /// @param amount0Owed The amount of token0 due to the pool for the minted liquidity
     /// @param amount1Owed The amount of token1 due to the pool for the minted liquidity
-    ///  Any data passed through by the caller via the IUniswapV3PoolActions#mint call
+    /// @param data  Any data passed through by the caller via the IUniswapV3PoolActions#mint call
     function uniswapV3MintCallback(
         uint256 amount0Owed,
-        uint256 amount1Owed
+        uint256 amount1Owed,
+        bytes calldata data
     ) external;
 }
 

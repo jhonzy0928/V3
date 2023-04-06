@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@metamask/sdk": "^0.1.0",
+    "@uniswap/v3-sdk": "^3.9.0",
+    "ethers": "^6.2.3"
+  }
+}

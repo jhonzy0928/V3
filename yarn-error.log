@@ -1,0 +1,36 @@
+Arguments: 
+  D:\node-js\node.exe C:\Users\YoungzZ\AppData\Local\node\corepack\yarn\1.22.19\bin\yarn.js add MetaMask
+
+PATH: 
+  D:\Java_study\bin;C:\Program Files\Common Files\Oracle\Java\javapath;C:\Program Files\MySQL\MySQL Server 8.0\bin;D:\3D\sp\bin\;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;D:\LINGO64_18\;D:\LINGO64_12\;D:\math\JRE\bin;D:\matalb2019r\runtime\win64;D:\matalb2019r\bin;D:\matalb2019r\polyspace\bin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\NVIDIA Corporation\NVIDIA NvDLISR;C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;D:\code;D:\Git\cmd;D:\node-js\;C:\Program Files\Pandoc\;D:\NodeJ\node-v11.0.0-win-x64;D:\NodeJ\node-v11.0.0-win-x64\node_cache;D:\NodeJ\node-v11.0.0-win-x64\node_global;D:\Rust\.cargo\bin;C:\Users\YoungzZ\.cargo\bin;C:\Users\YoungzZ\AppData\Local\Programs\Python\Python37-32\Scripts\;C:\Users\YoungzZ\AppData\Local\Programs\Python\Python37-32\;C:\Users\YoungzZ\AppData\Local\Microsoft\WindowsApps;C:\Program Files\JetBrains\PyCharm 2019.2.4\bin;;D:\QQGameTempest\Hall.57773\;C:\Users\YoungzZ\.dotnet\tools;C:\Users\YoungzZ\AppData\Roaming\npm;D:\vscode\Microsoft VS Code\bin
+
+Yarn version: 
+  1.22.19
+
+Node version: 
+  18.14.0
+
+Platform: 
+  win32 x64
+
+Trace: 
+  Error: https://registry.npmjs.org/MetaMask: Not found
+      at params.callback [as _callback] (C:\Users\YoungzZ\AppData\Local\node\corepack\yarn\1.22.19\lib\cli.js:66145:18)
+      at self.callback (C:\Users\YoungzZ\AppData\Local\node\corepack\yarn\1.22.19\lib\cli.js:140890:22)
+      at Request.emit (node:events:513:28)
+      at Request.<anonymous> (C:\Users\YoungzZ\AppData\Local\node\corepack\yarn\1.22.19\lib\cli.js:141862:10)
+      at Request.emit (node:events:513:28)
+      at IncomingMessage.<anonymous> (C:\Users\YoungzZ\AppData\Local\node\corepack\yarn\1.22.19\lib\cli.js:141784:12)
+      at Object.onceWrapper (node:events:627:28)
+      at IncomingMessage.emit (node:events:525:35)
+      at endReadableNT (node:internal/streams/readable:1359:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+
+npm manifest: 
+  No manifest
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile
