@@ -2,46 +2,30 @@
 pragma solidity ^0.8.14;
 import "./lib/Tick.sol";
 import "./lib/Position.sol";
-import "../lib/solmate/src/tokens/ERC20.sol";
+import "./lib/Math.sol";
+import "./lib/Position.sol";
+import "./lib/SwapMath.sol";
+import "./lib/Tick.sol";
+import "./lib/TickBitmap.sol";
+import "./lib/TickMath.sol";
+import "./interfaces/IUniswapV3MintCallback.sol";
+import "./interfaces/IUniswapV3SwapCallback.sol";
 import "./interfaces/IERC20.sol";
 
-interface IUniswapV3SwapCallback {
-    /// @notice Called to `msg.sender` after executing a swap via IUniswapV3Pool#swap.
-    /// @dev In the implementation you must pay the pool tokens owed for the swap.
-    /// The caller of this method must be checked to be a UniswapV3Pool deployed by the canonical UniswapV3Factory.
-    /// amount0Delta and amount1Delta can both be 0 if no tokens were swapped.
-    /// @param amount0Delta The amount of token0 that was sent (negative) or must be received (positive) by the pool by
-    /// the end of the swap. If positive, the callback must send that amount of token0 to the pool.
-    /// @param amount1Delta The amount of token1 that was sent (negative) or must be received (positive) by the pool by
-    /// the end of the swap. If positive, the callback must send that amount of token1 to the pool.
-    /// @param data Any data passed through by the caller via the IUniswapV3PoolActions#swap call
-    function uniswapV3SwapCallback(
-        int256 amount0Delta,
-        int256 amount1Delta,
-        bytes calldata data
-    ) external;
-}
-
-interface IUniswapV3MintCallback {
-    /// @notice Called to `msg.sender` after minting liquidity to a position from IUniswapV3Pool#mint.
-    /// @dev In the implementation you must pay the pool tokens owed for the minted liquidity.
-    /// The caller of this method must be checked to be a UniswapV3Pool deployed by the canonical UniswapV3Factory.
-    /// @param amount0Owed The amount of token0 due to the pool for the minted liquidity
-    /// @param amount1Owed The amount of token1 due to the pool for the minted liquidity
-    /// @param data  Any data passed through by the caller via the IUniswapV3PoolActions#mint call
-    function uniswapV3MintCallback(
-        uint256 amount0Owed,
-        uint256 amount1Owed,
-        bytes calldata data
-    ) external;
-}
-
-contract UniswapV3Pool is ERC20 {
+contract UniswapV3Pool {
+    //用合约库来初始化
+    //using A for B 是Solidity的一个语言特性，能够让你用库合约 A 中的函数来扩展类型 B(数据结构？)
     using Tick for mapping(int24 => Tick.Info);
+    using TickBitmap for mapping(int16 => uint256);
     using Position for mapping(bytes32 => Position.Info);
     using Position for Position.Info;
 
+    mapping(int16 => uint256) public tickBitmap;
     mapping(address => uint256) private _balances;
+    uint128 public liquidity;
+
+    mapping(int24 => Tick.Info) public ticks;
+    mapping(bytes32 => Position.Info) public positions;
 
     error InvalidTickRange();
     error ZeroLiquidity();
@@ -74,6 +58,23 @@ contract UniswapV3Pool is ERC20 {
     address public immutable token0;
     address public immutable token1;
 
+    struct SwapState {
+        //SwapState 维护了当前 swap 的状态。
+        uint256 amountSpecifiedRemaining; //amoutSpecifiedRemaining 跟踪了还需要从池子中获取的 token 数量：当这个数量为 0 时，这笔订单就被填满了。
+        uint256 amountCalculated; //amountCalculated 是由合约计算出的输出数量。
+        uint160 sqrtPriceX96; //sqrtPriceX96 和 tick 是交易结束后的价格和 tick。
+        int24 tick;
+    }
+
+    struct StepState {
+        //StepState 维护了当前交易“一步”的状态。这个结构体跟踪“填满订单”过程中一个循环的状态。
+        uint160 sqrtPriceStartX96; //sqrtPriceStartX96 跟踪循环开始时的价格
+        int24 nextTick; //nextTick 是能够为交易提供流动性的下一个已初始化的tick
+        uint160 sqrtPriceNextX96; //sqrtPriceNextX96 是下一个 tick 的价格
+        uint256 amountIn;
+        uint256 amountOut;
+    }
+
     struct Slot0 {
         uint160 sqrtPriceX96;
         int24 tick;
@@ -85,39 +86,34 @@ contract UniswapV3Pool is ERC20 {
         address payer;
     }
 
-    uint128 public liquidity;
-
-    mapping(int24 => Tick.Info) public ticks;
-    mapping(bytes32 => Position.Info) public positions;
-
     //在构造函数中，我们初始化了不可变的 token 地址、现在的价格和对应的 tick。
     constructor(
         address token0_,
         address token1_,
         uint160 sqrtPriceX96,
         int24 tick
-    ) ERC20("pair", "zy", 18) {
+    ) {
         token0 = token0_;
         token1 = token1_;
 
         slot0 = Slot0({sqrtPriceX96: sqrtPriceX96, tick: tick});
     }
 
-    function balance0() private view returns (uint256) {
-        (bool success, bytes memory data) = token0.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
-        );
-        require(success && data.length >= 32);
-        return abi.decode(data, (uint256));
-    }
+    // function balance0() private view returns (uint256) {
+    //     (bool success, bytes memory data) = token0.staticcall(
+    //         abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
+    //     );
+    //     require(success && data.length >= 32);
+    //     return abi.decode(data, (uint256));
+    // }
 
-    function balance1() private view returns (uint256) {
-        (bool success, bytes memory data) = token1.staticcall(
-            abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
-        );
-        require(success && data.length >= 32);
-        return abi.decode(data, (uint256));
-    }
+    // function balance1() private view returns (uint256) {
+    //     (bool success, bytes memory data) = token1.staticcall(
+    //         abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
+    //     );
+    //     require(success && data.length >= 32);
+    //     return abi.decode(data, (uint256));
+    // }
 
     // function _safeTransfer(address token, address to, uint256 value) private {
     //     //可以调用其他合约函数
@@ -143,8 +139,15 @@ contract UniswapV3Pool is ERC20 {
         ) revert InvalidTickRange();
         if (amount == 0) revert ZeroLiquidity();
         //添加tick和position信息
-        ticks.update(lowerTick, amount);
-        ticks.update(upperTick, amount);
+        bool flippedLower = ticks.update(lowerTick, amount);
+        bool flippedUpper = ticks.update(upperTick, amount);
+        //传入tick和TickSpacing始终为1
+        if (flippedLower) {
+            tickBitmap.flipTick(lowerTick, 1);
+        }
+        if (flippedUpper) {
+            tickBitmap.flipTick(upperTick, 1);
+        }
 
         Position.Info storage position = positions.get(
             owner,
@@ -152,12 +155,21 @@ contract UniswapV3Pool is ERC20 {
             upperTick
         );
         position.update(amount);
+        Slot0 memory slot0_ = slot0;
+        amount0 = Math.calcAmount0Delta(
+            TickMath.getSqrtRatioAtTick(slot0_.tick),
+            TickMath.getSqrtRatioAtTick(upperTick),
+            amount
+        );
 
+        amount1 = Math.calcAmount1Delta(
+            TickMath.getSqrtRatioAtTick(slot0_.tick),
+            TickMath.getSqrtRatioAtTick(lowerTick),
+            amount
+        );
+        liquidity += uint128(amount);
         uint256 balance0Before;
         uint256 balance1Before;
-        amount0 = 0.998976618347425280 ether;
-        amount1 = 5000 ether;
-
         if (amount0 > 0) balance0Before = balance0();
         if (amount1 > 0) balance1Before = balance1();
         //这个callback为啥会在外面实现 是因为带了callback特殊？
@@ -166,10 +178,9 @@ contract UniswapV3Pool is ERC20 {
             amount1,
             data
         );
-
-        if (amount0 > 0 && balance0Before + amount0 < balance0())
+        if (amount0 > 0 && balance0Before + amount0 > balance0())
             revert InsufficientInputAmount();
-        if (amount1 > 0 && balance1Before + amount1 < balance1())
+        if (amount1 > 0 && balance1Before + amount1 > balance1())
             revert InsufficientInputAmount();
         emit Mint(
             msg.sender,
@@ -185,26 +196,87 @@ contract UniswapV3Pool is ERC20 {
     //recipient==提出token的接受者
     function swap(
         address recipient,
+        bool zeroForOne, //zeroForOne 是用来控制交易方向的 flag：当设置为 true，是用 token0 兑换 token1；false 则相反。
+        uint256 amountSpecified, //amountSpecified 是用户希望卖出的 token 数量。
         bytes calldata data
     ) public returns (int256 amount0, int256 amount1) {
-        int24 nextTick = 85184;
-        uint160 nextPrice = 5604469350942327889444743441197;
+        Slot0 memory slot0_ = slot0;
 
-        amount0 = -0.008396714242162444 ether;
-        amount1 = 42 ether;
-        //更新现在的 tick 和对应的 sqrtP：
-        (slot0.tick, slot0.sqrtPriceX96) = (nextTick, nextPrice);
-        //合约把对应的 token 发送给 recipient 并且让调用者将需要的 token 转移到本合约：
-        IERC20(token0).transfer(recipient, uint256(-amount0));
+        SwapState memory state = SwapState({
+            amountSpecifiedRemaining: amountSpecified,
+            amountCalculated: 0,
+            sqrtPriceX96: slot0_.sqrtPriceX96,
+            tick: slot0_.tick
+        });
+        while (state.amountSpecifiedRemaining > 0) {
+            //在循环中，我们设置一个价格区间为这笔交易提供流动性的价格区间。
+            //这个区间是从 state.sqrtPriceX96 到 step.sqrtPriceNextX96，
+            //后者是下一个初始化的 tick 对应的价格（从上一章实现的 nextInitializedTickWithinOneWord 中获取）
+            StepState memory step;
 
-        uint256 balance1Before = balance1();
-        IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(
-            amount0,
-            amount1,
-            data
-        );
-        if (balance1Before + uint256(amount1) < balance1())
-            revert InsufficientInputAmount();
+            step.sqrtPriceStartX96 = state.sqrtPriceX96;
+
+            (step.nextTick, ) = tickBitmap.nextInitializedTickWithinOneWord(
+                state.tick,
+                1,
+                zeroForOne
+            );
+            //根据sqrtP与tick的关系
+            step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.nextTick);
+            //接下来，我们计算当前价格区间能够提供的流动性的数量，以及交易达到的目标价格L dertaX
+            (state.sqrtPriceX96, step.amountIn, step.amountOut) = SwapMath
+                .computeSwapStep(
+                    state.sqrtPriceX96,
+                    step.sqrtPriceNextX96,
+                    liquidity,
+                    state.amountSpecifiedRemaining
+                );
+            //循环中的最后一步就是更新SwapState。step.amountIn 是这个价格区间可以从用户手中买走的token数量了；step.amountOut 是相应的池子卖给用户的数量。
+            //state.sqrtPriceX96 是交易结束后的现价（因为交易会改变价格）
+            state.amountSpecifiedRemaining -= step.amountIn;
+            state.amountCalculated += step.amountOut;
+            state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
+        }
+        if (state.tick != slot0_.tick) {
+            (slot0.sqrtPriceX96, slot0.tick) = (state.sqrtPriceX96, state.tick);
+        }
+
+        (amount0, amount1) = zeroForOne
+            ? (
+                //整体dertaX-Xremain>0, （没有填满）给用户发的B不够
+                int256(amountSpecified - state.amountSpecifiedRemaining),
+                -int256(state.amountCalculated)
+            )
+            : (
+                -int256(state.amountCalculated),
+                int256(amountSpecified - state.amountSpecifiedRemaining)
+            );
+        if (zeroForOne) {
+            IERC20(token1).transfer(recipient, uint256(-amount1));
+            uint256 balance0Before = balance0();
+            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(
+                amount0,
+                amount1,
+                data
+            );
+            //如果这个tick内dertaX不够满足到整个区间需要的dertaX
+            //before+需要的dertaX 与before+用户发的dertaX相比 用户发少了 不信任用户
+            if (balance0Before + uint256(amount0) > balance0())
+                revert InsufficientInputAmount();
+        } else {
+            IERC20(token0).transfer(recipient, uint256(-amount0));
+            uint256 balance1Before = balance1();
+            //先在这里实例化，然后别的合约调用时 再去实现callback函数
+            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(
+                amount0,
+                amount1,
+                data
+            );
+            //为啥源码是大于？
+            if (balance1Before + uint256(amount1) > balance1())
+                revert InsufficientInputAmount();
+        }
+
         emit Swap(
             msg.sender,
             recipient,
@@ -214,5 +286,13 @@ contract UniswapV3Pool is ERC20 {
             liquidity,
             slot0.tick
         );
+    }
+
+    function balance0() internal returns (uint256 balance) {
+        balance = IERC20(token0).balanceOf(address(this));
+    }
+
+    function balance1() internal returns (uint256 balance) {
+        balance = IERC20(token1).balanceOf(address(this));
     }
 }

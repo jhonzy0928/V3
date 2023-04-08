@@ -1,8 +1,8 @@
-//SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.19;
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.14;
 
-import "./UniswapV3Pool.sol";
-import "./interfaces/IERC20.sol";
+import "../src/UniswapV3Pool.sol";
+import "../src/interfaces/IERC20.sol";
 
 contract UniswapV3Manager {
     function mint(
@@ -11,18 +11,30 @@ contract UniswapV3Manager {
         int24 upperTick,
         uint128 liquidity,
         bytes calldata data
-    ) public {
-        UniswapV3Pool(poolAddress_).mint(
-            msg.sender,
-            lowerTick,
-            upperTick,
-            liquidity,
-            data
-        );
+    ) public returns (uint256, uint256) {
+        return
+            UniswapV3Pool(poolAddress_).mint(
+                msg.sender,
+                lowerTick,
+                upperTick,
+                liquidity,
+                data
+            );
     }
 
-    function swap(address poolAddress_, bytes calldata data) public {
-        UniswapV3Pool(poolAddress_).swap(msg.sender, data);
+    function swap(
+        address poolAddress_,
+        bool zeroForOne,
+        uint256 amountSpecified,
+        bytes calldata data
+    ) public returns (int256, int256) {
+        return
+            UniswapV3Pool(poolAddress_).swap(
+                msg.sender,
+                zeroForOne,
+                amountSpecified,
+                data
+            );
     }
 
     function uniswapV3MintCallback(
@@ -50,8 +62,6 @@ contract UniswapV3Manager {
         );
 
         if (amount0 > 0) {
-            IERC20 token0 = IERC20(UniswapV3Pool(address(this)).token0());
-            token0.transferFrom(extra.payer, msg.sender, uint256(amount0));
             IERC20(extra.token0).transferFrom(
                 extra.payer,
                 msg.sender,
@@ -60,8 +70,6 @@ contract UniswapV3Manager {
         }
 
         if (amount1 > 0) {
-            IERC20 token1 = IERC20(UniswapV3Pool(address(this)).token1());
-            token1.transferFrom(extra.payer, msg.sender, uint256(amount1));
             IERC20(extra.token1).transferFrom(
                 extra.payer,
                 msg.sender,
