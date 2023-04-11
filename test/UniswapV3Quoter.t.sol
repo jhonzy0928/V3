@@ -28,8 +28,8 @@ contract UniswapV3QuoterTest is Test, TestUtils {
         pool = new UniswapV3Pool(
             address(token0),
             address(token1),
-            5602277097478614198912276234240,
-            85176
+            sqrtP(5000),
+            tick(5000)
         );
 
         manager = new UniswapV3Manager();
@@ -37,16 +37,17 @@ contract UniswapV3QuoterTest is Test, TestUtils {
         token0.approve(address(manager), wethBalance);
         token1.approve(address(manager), usdcBalance);
 
-        int24 lowerTick = 84222;
-        int24 upperTick = 86129;
-        uint128 liquidity = 1517882343751509868544;
-        bytes memory extra = encodeExtra(
-            address(token0),
-            address(token1),
-            address(this)
+        manager.mint(
+            IUniswapV3Manager.MintParams({
+                poolAddress: address(pool),
+                lowerTick: tick(4545),
+                upperTick: tick(5500),
+                amount0Desired: 1 ether,
+                amount1Desired: 5000 ether,
+                amount0Min: 0,
+                amount1Min: 0
+            })
         );
-
-        manager.mint(address(pool), lowerTick, upperTick, liquidity, extra);
 
         quoter = new UniswapV3Quoter();
     }
@@ -57,14 +58,15 @@ contract UniswapV3QuoterTest is Test, TestUtils {
                 UniswapV3Quoter.QuoteParams({
                     pool: address(pool),
                     amountIn: 0.01337 ether,
+                    sqrtPriceLimitX96: sqrtP(4993),
                     zeroForOne: true
                 })
             );
 
-        assertEq(amountOut, 66.808388890199406685 ether, "invalid amountOut");
+        assertEq(amountOut, 66.807123823853842027 ether, "invalid amountOut");
         assertEq(
             sqrtPriceX96After,
-            5598789932670288701514545755210,
+            5598737223630966236662554421688,
             "invalid sqrtPriceX96After"
         );
         assertEq(tickAfter, 85163, "invalid tickAFter");
@@ -76,17 +78,18 @@ contract UniswapV3QuoterTest is Test, TestUtils {
                 UniswapV3Quoter.QuoteParams({
                     pool: address(pool),
                     amountIn: 42 ether,
+                    sqrtPriceLimitX96: sqrtP(5005),
                     zeroForOne: false
                 })
             );
 
-        assertEq(amountOut, 0.008396714242162445 ether, "invalid amountOut");
+        assertEq(amountOut, 0.008396874645169943 ether, "invalid amountOut");
         assertEq(
             sqrtPriceX96After,
-            5604469350942327889444743441197,
+            5604415652688968742392013927525,
             "invalid sqrtPriceX96After"
         );
-        assertEq(tickAfter, 85184, "invalid tickAFter");
+        assertEq(tickAfter, 85183, "invalid tickAFter");
     }
 
     function testQuoteAndSwapUSDCforETH() public {
@@ -95,6 +98,7 @@ contract UniswapV3QuoterTest is Test, TestUtils {
             UniswapV3Quoter.QuoteParams({
                 pool: address(pool),
                 amountIn: amountIn,
+                sqrtPriceLimitX96: sqrtP(4993),
                 zeroForOne: true
             })
         );
@@ -109,6 +113,7 @@ contract UniswapV3QuoterTest is Test, TestUtils {
             address(pool),
             true,
             amountIn,
+            sqrtP(4993),
             extra
         );
 
@@ -122,6 +127,7 @@ contract UniswapV3QuoterTest is Test, TestUtils {
             UniswapV3Quoter.QuoteParams({
                 pool: address(pool),
                 amountIn: amountIn,
+                sqrtPriceLimitX96: sqrtP(5010),
                 zeroForOne: false
             })
         );
@@ -136,6 +142,7 @@ contract UniswapV3QuoterTest is Test, TestUtils {
             address(pool),
             false,
             amountIn,
+            sqrtP(5010),
             extra
         );
 

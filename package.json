@@ -3,6 +3,8 @@
     "@metamask/sdk": "^0.1.0",
     "@prb/math": "^3.3.1",
     "@uniswap/v3-sdk": "^3.9.0",
-    "ethers": "5.6.9"
+    "abdk-libraries-solidity": "^3.2.0",
+    "ethers": "5.6.9",
+    "stylelint-config-standard": "^32.0.0"
   }
 }
