@@ -5,6 +5,7 @@
     "@uniswap/v3-sdk": "^3.9.0",
     "abdk-libraries-solidity": "^3.2.0",
     "ethers": "5.6.9",
+    "solidity-bytes-utils": "^0.8.0",
     "stylelint-config-standard": "^32.0.0"
   }
 }

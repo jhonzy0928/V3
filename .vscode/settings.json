@@ -2,5 +2,6 @@
   "solidity.packageDefaultDependenciesContractsDirectory": "src",
   "solidity.packageDefaultDependenciesDirectory": "lib",
   "scss.validate": false,
-  "css.validate": false
+  "css.validate": false,
+  "solidity.defaultCompiler": "remote"
 }

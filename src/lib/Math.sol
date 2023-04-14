@@ -10,7 +10,8 @@ library Math {
     function calcAmount0Delta(
         uint160 sqrtPriceAX96,
         uint160 sqrtPriceBX96,
-        uint128 liquidity
+        uint128 liquidity,
+        bool roundUp
     ) internal pure returns (uint256 amount0) {
         if (sqrtPriceAX96 > sqrtPriceBX96)
             (sqrtPriceAX96, sqrtPriceBX96) = (sqrtPriceBX96, sqrtPriceAX96);
@@ -18,14 +19,18 @@ library Math {
         require(sqrtPriceAX96 > 0);
         //在计算input的时候round up，sqrtp会减少，dertp会减少，后续out不会坏账
         //在common中mulmod 是Solidity的一个函数，将两个数 a 和 b 相乘，乘积除以 denominator，返回余数。如果余数为正，我们将结果上取整。
-        amount0 = divRoundingUp(
-            mulDivRoundingUp(
-                (uint256(liquidity) << FixedPoint96.RESOLUTION),
-                (sqrtPriceBX96 - sqrtPriceAX96),
-                sqrtPriceBX96
-            ),
-            sqrtPriceAX96
-        );
+        uint256 numerator1 = uint256(liquidity) << FixedPoint96.RESOLUTION;
+        uint256 numerator2 = sqrtPriceBX96 - sqrtPriceAX96;
+        if (roundUp) {
+            amount0 = divRoundingUp(
+                mulDivRoundingUp(numerator1, numerator2, sqrtPriceBX96),
+                sqrtPriceAX96
+            );
+        } else {
+            amount0 =
+                mulDiv(numerator1, numerator2, sqrtPriceBX96) /
+                sqrtPriceAX96;
+        }
     }
 
     /// @notice Calculates amount1 delta between two prices
@@ -33,16 +38,75 @@ library Math {
     function calcAmount1Delta(
         uint160 sqrtPriceAX96,
         uint160 sqrtPriceBX96,
-        uint128 liquidity
+        uint128 liquidity,
+        bool roundUp
     ) internal pure returns (uint256 amount1) {
         if (sqrtPriceAX96 > sqrtPriceBX96)
             (sqrtPriceAX96, sqrtPriceBX96) = (sqrtPriceBX96, sqrtPriceAX96);
 
-        amount1 = mulDivRoundingUp(
-            liquidity,
-            (sqrtPriceBX96 - sqrtPriceAX96),
-            FixedPoint96.Q96
-        );
+        if (roundUp) {
+            amount1 = mulDivRoundingUp(
+                liquidity,
+                (sqrtPriceBX96 - sqrtPriceAX96),
+                FixedPoint96.Q96
+            );
+        } else {
+            amount1 = mulDiv(
+                liquidity,
+                (sqrtPriceBX96 - sqrtPriceAX96),
+                FixedPoint96.Q96
+            );
+        }
+    }
+
+    /// @notice Calculates amount0 delta between two prices
+    function calcAmount0Delta(
+        uint160 sqrtPriceAX96,
+        uint160 sqrtPriceBX96,
+        int128 liquidity
+    ) internal pure returns (int256 amount0) {
+        amount0 = liquidity < 0
+            ? -int256(
+                calcAmount0Delta(
+                    sqrtPriceAX96,
+                    sqrtPriceBX96,
+                    uint128(-liquidity),
+                    false
+                )
+            )
+            : int256(
+                calcAmount0Delta(
+                    sqrtPriceAX96,
+                    sqrtPriceBX96,
+                    uint128(liquidity),
+                    true
+                )
+            );
+    }
+
+    /// @notice Calculates amount1 delta between two prices
+    function calcAmount1Delta(
+        uint160 sqrtPriceAX96,
+        uint160 sqrtPriceBX96,
+        int128 liquidity
+    ) internal pure returns (int256 amount1) {
+        amount1 = liquidity < 0
+            ? -int256(
+                calcAmount1Delta(
+                    sqrtPriceAX96,
+                    sqrtPriceBX96,
+                    uint128(-liquidity),
+                    false
+                )
+            )
+            : int256(
+                calcAmount1Delta(
+                    sqrtPriceAX96,
+                    sqrtPriceBX96,
+                    uint128(liquidity),
+                    true
+                )
+            );
     }
 
     function getNextSqrtPriceFromInput(
